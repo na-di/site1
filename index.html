@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>באמוס הושבה</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+
+  <div id="hall">
+    <!-- הסקיצה של אולם האירועים -->
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+  <form id="table-form">
+    <label for="table-name">שם השולחן:</label>
+    <input type="text" id="table-name" required>
+
+    <label for="table-type">סוג השולחן:</label>
+    <select id="table-type">
+      <option value="רגיל">רגיל</option>
+      <option value="רזרבה">רזרבה</option>
+      <option value="משלימים">משלימים</option>
+      <option value="אבירים">שולחן אבירים</option>
+    </select>
+
+    <label for="table-seats">מספר הכסאות:</label>
+    <input type="number" id="table-seats" required>
+
+    <button type="submit">הוסף שולחן</button>
+  </form>
+
+  <form id="guest-form">
+    <label for="table-name-select">בחר שולחן:</label>
+    <select id="table-name-select"></select>
+
+    <label for="guest-name">שם המוזמן:</label>
+    <input type="text" id="guest-name" required>
+
+    <button type="submit">הוסף מוזמן</button>
+  </form>
+
+  <form id="excel-upload-form">
+    <label for="excel-upload">העלה קובץ אקסל:</label>
+    <input type="file" id="excel-upload" accept=".xlsx, .xls">
+
+    <button type="submit">הוסף מוזמנים מקובץ</button>
+  </form>
+
+  <div id="empty-seats"></div>
+
+  <div id="guest-list">
+    <h3>שמות המוזמנים:</h3>
+    <textarea id="guest-list-textbox" readonly></textarea>
+  </div>
+  <form id="delete-form">
+    <label for="table-to-delete">בחר שולחן למחיקה:</label>
+    <select id="table-to-delete"></select>
+    <button type="submit">מחק שולחן</button>
+  </form>
+
+  <form id="add-form">
+    <label for="table-seats-add">מספר כיסאות להוספה:</label>
+    <input type="number" id="table-seats-add" required>
+    <button type="submit">הוסף שולחן</button>
+  </form>
+
+  <form id="seating-form">
+    <label for="table-name-seating">בחר שולחן:</label>
+    <select id="table-name-seating"></select>
+    <label for="guests-seating">שמות המוזמנים:</label>
+    <textarea id="guests-seating"></textarea>
+    <button type="submit">קבע סידורי הושבה</button>
+  </form>
+
+  <form id="clear-form">
+    <button type="submit">נקה את כל השולחנות והמוזמנים</button>
+  </form>
+
+
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+  <script>
+    // אוסף שמאחזר את פרטי השולחנות
+    var tables = [];
+
+    // אוסף שמאחזר את פרטי המוזמנים
+    var guests = [];
+
+    // הוספת אירוע מאזין לטופס השולחן
+    var formElement = document.getElementById("table-form");
+    formElement.addEventListener("submit", function(event) {
+      event.preventDefault();
+
+      // איסוף פרטי השולחן מהטופס
+      var tableName = document.getElementById("table-name").value;
+      var tableType = document.getElementById("table-type").value;
+      var tableSeats = parseInt(document.getElementById("table-seats").value);
+
+      // בניית האובייקט שולחן
+      var table = {
+        name: tableName,
+        type: tableType,
+        seats: tableSeats,
+        guests: []
+      };
+
+      // הוספת השולחן לרשימה
+      tables.push(table);
+
+      // ריענון הסקיצה עם השולחנות המעודכנים
+      refreshHall();
+      updateTableSelect();
+      updateEmptySeats();
+    });
+
+    // הוספת אירוע מאזין לטופס המוזמנים
+    var guestFormElement = document.getElementById("guest-form");
+    guestFormElement.addEventListener("submit", function(event) {
+      event.preventDefault();
+
+      // איסוף פרטי המוזמן מהטופס
+      var selectedTable = document.getElementById("table-name-select").value;
+      var guestName = document.getElementById("guest-name").value;
+
+      // מציאת השולחן בו יש להוסיף את המוזמן
+      var table = tables.find(function(table) {
+        return table.name === selectedTable;
+      });
+
+      // בדיקה אם השולחן נמצא
+      if (table) {
+        // הוספת המוזמן לרשימת המוזמנים של השולחן
+        table.guests.push(guestName);
+        refreshHall();
+        updateGuestList();
+      }
+
+      // ניקוי טופס המוזמנים
+      guestFormElement.reset();
+    });
+
+    // הוספת אירוע מאזין לטופס ההעלאה של קובץ אקסל
+    var excelUploadFormElement = document.getElementById("excel-upload-form");
+    excelUploadFormElement.addEventListener("submit", function(event) {
+      event.preventDefault();
+
+      var fileInput = document.getElementById("excel-upload");
+
+      if (fileInput.files.length > 0) {
+        var file = fileInput.files[0];
+        var reader = new FileReader();
+
+        reader.onload = function(e) {
+          var data = new Uint8Array(e.target.result);
+          var workbook = XLSX.read(data, { type: "array" });
+
+          var sheetName = workbook.SheetNames[0];
+          var worksheet = workbook.Sheets[sheetName];
+
+          var guestNames = [];
+          var rowIndex = 1;
+          var cell = worksheet["A" + rowIndex];
+
+          while (cell && cell.v) {
+            guestNames.push(cell.v);
+            rowIndex++;
+            cell = worksheet["A" + rowIndex];
+          }
+
+          var guestListTextbox = document.getElementById("guest-list-textbox");
+          guestListTextbox.value = guestNames.join(", ");
+        };
+
+        reader.readAsArrayBuffer(file);
+      }
+    });
+
+    // פונקציה לריענון הסקיצה עם השולחנות המעודכנים
+    function refreshHall() {
+      var hallElement = document.getElementById("hall");
+      hallElement.innerHTML = "";
+
+      tables.forEach(function(table) {
+        var tableElement = document.createElement("div");
+        tableElement.className = "table";
+
+        tableElement.innerHTML = table.name + "<br>(" + table.type + ")<br>";
+        tableElement.innerHTML += "מספר הכסאות: " + table.seats + "<br>";
+        tableElement.innerHTML += "מספר המוזמנים: " + table.guests.length + "<br>";
+
+        if (table.type === "רזרבה") {
+          tableElement.classList.add("reserved");
+        } else if (table.type === "אבירים") {
+          tableElement.classList.add("knight");
+        }
+
+        hallElement.appendChild(tableElement);
+      });
+    }
+
+    // פונקציה לעדכון רשימת בחירת שמות השולחנות בטופס המוזמנים
+    function updateTableSelect() {
+      var tableSelectElement = document.getElementById("table-name-select");
+      tableSelectElement.innerHTML = "";
+
+      tables.forEach(function(table) {
+        var optionElement = document.createElement("option");
+        optionElement.value = table.name;
+        optionElement.textContent = table.name;
+        tableSelectElement.appendChild(optionElement);
+      });
+    }
+
+    // פונקציה לעדכון רשימת המוזמנים
+    function updateGuestList() {
+      var guestListTextbox = document.getElementById("guest-list-textbox");
+      var guestNames = [];
+
+      tables.forEach(function(table) {
+        table.guests.forEach(function(guest) {
+          guestNames.push(guest);
+        });
+      });
+
+      guestListTextbox.value = guestNames.join(", ");
+    }
+
+    // קריאת הפונקציה לראשונה
+    refreshHall();
+    updateTableSelect();
+    updateGuestList();
+  </script>
+</body>
+</html>
